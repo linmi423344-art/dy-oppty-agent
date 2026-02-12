@@ -1,0 +1,15 @@
+module: "潜力爆品"
+window: "7天"
+categories:
+  - "洗护清洁剂"
+  - "卫生巾"
+  - "纸"
+  - "香薰"
+result_method: "export_first"
+throttling:
+  min_sleep_s: 20
+  max_sleep_s: 60
+safety:
+  stop_on_captcha: true
+  stop_on_risk_notice: true
+  max_clicks: 60
