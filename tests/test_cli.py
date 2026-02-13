@@ -16,7 +16,16 @@ def test_load_config_defaults_base_url_when_missing(tmp_path: Path) -> None:
     assert parsed.base_url == DEFAULT_BASE_URL
 
 
-def test_run_calls_browser_runner(monkeypatch, tmp_path: Path) -> None:
+def test_run_manifest_contains_base_url(tmp_path: Path) -> None:
+    parsed = AppConfig(base_url="https://example.com/", data_dir=str(tmp_path))
+
+    result = run(parsed, dry_run=True)
+    data = json.loads(result.read_text(encoding="utf-8"))
+
+    assert data["base_url"] == "https://example.com/"
+
+
+def test_run_calls_injected_runner(tmp_path: Path) -> None:
     manifest_path = tmp_path / "run_manifest.json"
     manifest_path.write_text(json.dumps({"base_url": "https://example.com/"}), encoding="utf-8")
 
@@ -27,10 +36,9 @@ def test_run_calls_browser_runner(monkeypatch, tmp_path: Path) -> None:
 
         return _Result(manifest_path)
 
-    monkeypatch.setattr("oppty_agent.cli.run_export_flow", _fake_runner)
     parsed = AppConfig(base_url="https://example.com/")
 
-    result = run(parsed)
+    result = run(parsed, runner=_fake_runner)
     data = json.loads(result.read_text(encoding="utf-8"))
 
     assert data["base_url"] == "https://example.com/"
