@@ -1,14 +1,16 @@
 from __future__ import annotations
 
-import argparse
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+import typer
+
 from oppty_agent.browser.runner import run_export_flow
 
 DEFAULT_BASE_URL = "https://fxg.jinritemai.com/"
+DEFAULT_CONFIG_PATH = "oppty_agent/config/example.yaml"
 
 
 @dataclass
@@ -117,33 +119,29 @@ def run(config: AppConfig) -> Path:
     return result.manifest_path
 
 
-def _get_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="oppty-agent")
-    parser.add_argument("--config", default=None)
+app = typer.Typer(help="Opportunity export CLI")
 
-    subparsers = parser.add_subparsers(dest="command", required=True)
-    login_parser = subparsers.add_parser("login")
-    login_parser.add_argument("--config", default=None)
-    run_parser = subparsers.add_parser("run")
-    run_parser.add_argument("--config", default=None)
-    return parser
+
+@app.command()
+def login_cmd(config: str = typer.Option(DEFAULT_CONFIG_PATH, "--config")) -> None:
+    login(load_config(config))
+
+
+@app.command()
+def run_cmd(config: str = typer.Option(DEFAULT_CONFIG_PATH, "--config")) -> None:
+    try:
+        run(load_config(config))
+    except RuntimeError as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(code=1) from exc
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = _get_parser()
-    args = parser.parse_args(argv)
-    config_path = args.config or "oppty_agent/config/example.yaml"
-    config = load_config(config_path)
-
-    if args.command == "login":
-        login(config)
-    elif args.command == "run":
-        try:
-            run(config)
-        except RuntimeError:
-            return 1
-    else:
-        parser.error(f"Unknown command: {args.command}")
+    command = typer.main.get_command(app)
+    try:
+        command.main(args=argv, prog_name="oppty-agent", standalone_mode=False)
+    except SystemExit as exc:
+        return int(exc.code or 0)
     return 0
 
 
