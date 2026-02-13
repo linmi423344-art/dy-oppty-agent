@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 import argparse
-import json
 from dataclasses import dataclass
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+
+from oppty_agent.browser.runner import run_export_first
 
 DEFAULT_BASE_URL = "https://fxg.jinritemai.com/"
 
@@ -17,6 +17,8 @@ class AppConfig:
     headless: bool = False
     data_dir: str = "data"
     base_url: str = DEFAULT_BASE_URL
+    ui_timeout_s: int = 20
+    download_timeout_s: int = 60
 
 
 def _parse_simple_yaml(config_path: str | Path) -> dict[str, Any]:
@@ -45,10 +47,12 @@ def load_config(config_path: str | Path) -> AppConfig:
         headless=bool(raw.get("headless", False)),
         data_dir=str(raw.get("data_dir", "data")),
         base_url=str(raw.get("base_url", DEFAULT_BASE_URL)),
+        ui_timeout_s=int(raw.get("ui_timeout_s", 20)),
+        download_timeout_s=int(raw.get("download_timeout_s", 60)),
     )
 
 
-def login(config: AppConfig) -> None:
+def login(config: AppConfig, profile_dir: str) -> None:
     """Login flow scaffold with safe persistent context cleanup."""
     context: Any | None = None
     try:
@@ -59,7 +63,7 @@ def login(config: AppConfig) -> None:
 
         with sync_playwright() as p:
             context = p.chromium.launch_persistent_context(
-                user_data_dir=str(Path(config.data_dir) / "browser-profile"),
+                user_data_dir=profile_dir,
                 headless=config.headless,
             )
             page = context.new_page()
@@ -69,33 +73,29 @@ def login(config: AppConfig) -> None:
             context.close()
 
 
-def _build_run_manifest(run_id: str, config: AppConfig) -> dict[str, Any]:
-    return {
-        "run_id": run_id,
-        "created_at": datetime.now(timezone.utc).isoformat(),
-        "base_url": config.base_url,
-    }
-
-
-def run(config: AppConfig) -> Path:
-    run_id = datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S")
-    run_dir = Path(config.data_dir) / "runs" / run_id
-    run_dir.mkdir(parents=True, exist_ok=True)
-    manifest_path = run_dir / "run_manifest.json"
-    manifest = _build_run_manifest(run_id, config)
-    manifest_path.write_text(json.dumps(manifest, indent=2), encoding="utf-8")
-    return manifest_path
+def run(config: AppConfig, profile_dir: str = "data/profile") -> Path:
+    result = run_export_first(
+        base_url=config.base_url,
+        data_dir=config.data_dir,
+        profile_dir=profile_dir,
+        headless=config.headless,
+        download_timeout_s=config.download_timeout_s,
+    )
+    return result.manifest_path
 
 
 def _get_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="oppty-agent")
     parser.add_argument("--config", default=None)
+    parser.add_argument("--profile-dir", default="data/profile")
 
     subparsers = parser.add_subparsers(dest="command", required=True)
     login_parser = subparsers.add_parser("login")
     login_parser.add_argument("--config", default=None)
+    login_parser.add_argument("--profile-dir", default="data/profile")
     run_parser = subparsers.add_parser("run")
     run_parser.add_argument("--config", default=None)
+    run_parser.add_argument("--profile-dir", default="data/profile")
     return parser
 
 
@@ -106,9 +106,16 @@ def main(argv: list[str] | None = None) -> int:
     config = load_config(config_path)
 
     if args.command == "login":
-        login(config)
+        login(config, profile_dir=args.profile_dir)
     elif args.command == "run":
-        run(config)
+        result = run_export_first(
+            base_url=config.base_url,
+            data_dir=config.data_dir,
+            profile_dir=args.profile_dir,
+            headless=config.headless,
+            download_timeout_s=config.download_timeout_s,
+        )
+        return result.exit_code
     else:
         parser.error(f"Unknown command: {args.command}")
     return 0
