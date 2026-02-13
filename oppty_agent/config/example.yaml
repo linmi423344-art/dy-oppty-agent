@@ -3,3 +3,19 @@ password: ""
 headless: false
 data_dir: "data"
 base_url: "https://fxg.jinritemai.com/"
+profile_dir: "data/browser-profile"
+categories:
+  - "女装"
+  - "美妆"
+ui:
+  module_label: "潜力爆品"
+  window_label: "7天"
+  export_button_text_candidates: ["导出", "导出数据"]
+  opportunity_center_nav_candidates: ["商机中心"]
+  product_nav_candidates: ["商品"]
+download:
+  dir: "data/downloads"
+  keep_original_filename: true
+selectors: {}
+safety:
+  max_clicks: 50
