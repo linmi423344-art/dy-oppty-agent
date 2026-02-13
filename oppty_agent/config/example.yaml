@@ -1,0 +1,5 @@
+username: ""
+password: ""
+headless: false
+data_dir: "data"
+base_url: "https://fxg.jinritemai.com/"
