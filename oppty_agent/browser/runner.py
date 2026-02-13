@@ -6,8 +6,15 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from oppty_agent.browser.artifacts import POST_EXPORT_SCREENSHOT, RUN_MANIFEST_NAME, stop_screenshot_path
 from oppty_agent.browser.manifest import CategoryResult, add_category_result, build_run_manifest, sha256_file
 from oppty_agent.browser.risk import find_risk_keywords
+from oppty_agent.browser.selectors import (
+    EXPORT_BUTTON_SELECTORS,
+    OPPORTUNITY_CENTER_SELECTORS,
+    POTENTIAL_PRODUCTS_SELECTORS,
+    RANGE_7_DAYS_SELECTORS,
+)
 from oppty_agent.browser.state_machine import WorkerState
 
 
@@ -29,7 +36,7 @@ def _collect_risk(page: Any, run_dir: Path, risk_keywords: list[str]) -> list[st
     matched = find_risk_keywords(body_text, keywords=risk_keywords)
     if matched:
         reason = "_".join(matched)
-        screenshot_path = run_dir / f"STOP_{reason}.png"
+        screenshot_path = stop_screenshot_path(run_dir, reason)
         page.screenshot(path=str(screenshot_path), full_page=True)
     return matched
 
@@ -49,7 +56,7 @@ def run_export_flow(config: Any, run_id: str) -> BrowserRunResult:
     raw_root = Path(config.data_dir) / "raw" / run_id
     raw_root.mkdir(parents=True, exist_ok=True)
     manifest = build_run_manifest(run_id=run_id, base_url=config.base_url)
-    manifest_path = raw_root / "run_manifest.json"
+    manifest_path = raw_root / RUN_MANIFEST_NAME
 
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=config.headless)
@@ -67,13 +74,13 @@ def run_export_flow(config: Any, run_id: str) -> BrowserRunResult:
             raise RuntimeError("Risk detected, worker stopped")
 
         state = WorkerState.OPEN_OPPORTUNITY_CENTER
-        _safe_click(page, ["text=商机中心", "a:has-text('商机中心')"])
+        _safe_click(page, OPPORTUNITY_CENTER_SELECTORS)
 
         state = WorkerState.OPEN_POTENTIAL_EXPLOSIVE_PRODUCTS
-        _safe_click(page, ["text=潜力爆品", "a:has-text('潜力爆品')"])
+        _safe_click(page, POTENTIAL_PRODUCTS_SELECTORS)
 
         state = WorkerState.SET_RANGE_7_DAYS
-        _safe_click(page, ["text=7天", "button:has-text('7天')"])
+        _safe_click(page, RANGE_7_DAYS_SELECTORS)
 
         state = WorkerState.LOOP_CATEGORIES
         for category in config.ui["categories"]:
@@ -84,7 +91,7 @@ def run_export_flow(config: Any, run_id: str) -> BrowserRunResult:
             _safe_click(page, [f"text={category}"])
             state = WorkerState.EXPORT
             with page.expect_download(timeout=config.download["timeout_ms"]) as download_info:
-                _safe_click(page, ["text=导出", "button:has-text('导出')"])
+                _safe_click(page, EXPORT_BUTTON_SELECTORS)
             download = download_info.value
             temp_target = category_dir / download.suggested_filename
             download.save_as(str(temp_target))
@@ -106,7 +113,7 @@ def run_export_flow(config: Any, run_id: str) -> BrowserRunResult:
             if final_target != latest_export:
                 shutil.move(str(latest_export), str(final_target))
 
-            snap_path = category_dir / "post_export.png"
+            snap_path = category_dir / POST_EXPORT_SCREENSHOT
             page.screenshot(path=str(snap_path), full_page=True)
             screenshots.append(str(snap_path.relative_to(raw_root)))
 
