@@ -3,3 +3,5 @@ password: ""
 headless: false
 data_dir: "data"
 base_url: "https://fxg.jinritemai.com/"
+ui_timeout_s: 20
+download_timeout_s: 60
